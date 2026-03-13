@@ -1,6 +1,8 @@
 package com.romrobotics.bluetoothcontroller
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -32,6 +34,64 @@ class WifiManageActivity : AppCompatActivity() {
 
     /** Saved original connection callback from MainActivity (to restore on pause) */
     private var originalConnectionCallback: ((Boolean) -> Unit)? = null
+
+    /** Handler for periodic Bluetooth connection health check */
+    private val healthCheckHandler = Handler(Looper.getMainLooper())
+    private val BT_HEALTH_CHECK_INTERVAL_MS = 5000L
+    private var consecutiveFailures = 0
+    private val MAX_CONSECUTIVE_FAILURES = 2
+
+    private val btHealthCheckRunnable = object : Runnable {
+        override fun run() {
+            val bt = btService
+            if (bt == null || !bt.isConnected) {
+                onBluetoothLost()
+                return
+            }
+
+            // Send PING on background thread to verify connection is alive
+            Thread {
+                val response = bt.sendAndReceive("PING", timeoutMs = 4000)
+                runOnUiThread {
+                    if (response == "PONG") {
+                        consecutiveFailures = 0
+                        updateBtStatusIndicator(true)
+                    } else {
+                        consecutiveFailures++
+                        android.util.Log.w("WifiManageActivity",
+                            "[WF-E13] PING failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)")
+                        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                            onBluetoothLost()
+                            return@runOnUiThread
+                        }
+                    }
+                    // Schedule next check
+                    healthCheckHandler.postDelayed(this@btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
+                }
+            }.start()
+        }
+    }
+
+    private fun onBluetoothLost() {
+        Toast.makeText(this, "[WF-E12] Bluetooth connection lost", Toast.LENGTH_LONG).show()
+        setButtonsEnabled(false)
+        updateBtStatusIndicator(false)
+        stopHealthCheck()
+    }
+
+    private fun updateBtStatusIndicator(connected: Boolean) {
+        supportActionBar?.subtitle = if (connected) "🔵 BT Connected" else "🔴 BT Disconnected"
+    }
+
+    private fun startHealthCheck() {
+        consecutiveFailures = 0
+        healthCheckHandler.removeCallbacks(btHealthCheckRunnable)
+        healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
+    }
+
+    private fun stopHealthCheck() {
+        healthCheckHandler.removeCallbacks(btHealthCheckRunnable)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,7 +177,7 @@ class WifiManageActivity : AppCompatActivity() {
     private fun scanWifiNetworks() {
         val bt = btService
         if (bt == null || !bt.isConnected) {
-            Toast.makeText(this, "Bluetooth not connected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "[WF-E01] Bluetooth not connected", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -132,12 +192,12 @@ class WifiManageActivity : AppCompatActivity() {
                 binding.btnScanWifi.text = getString(R.string.scan_wifi_networks)
 
                 if (response == null) {
-                    Toast.makeText(this, "No response from robot (timeout)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "[WF-E02] No response from robot (timeout)", Toast.LENGTH_SHORT).show()
                     return@runOnUiThread
                 }
 
                 if (response.startsWith("ERROR:")) {
-                    Toast.makeText(this, "Error: ${response.removePrefix("ERROR:")}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "[WF-E03] Error: ${response.removePrefix("ERROR:")}", Toast.LENGTH_SHORT).show()
                     return@runOnUiThread
                 }
 
@@ -146,13 +206,13 @@ class WifiManageActivity : AppCompatActivity() {
                     val networks = parseWifiList(listPart)
 
                     if (networks.isEmpty()) {
-                        Toast.makeText(this, "No WiFi networks found", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "[WF-E04] No WiFi networks found", Toast.LENGTH_SHORT).show()
                         return@runOnUiThread
                     }
 
                     showWifiSelectionDialog(networks)
                 } else {
-                    Toast.makeText(this, "Unexpected response: $response", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "[WF-E05] Unexpected response: $response", Toast.LENGTH_SHORT).show()
                 }
             }
         }.start()
@@ -167,20 +227,20 @@ class WifiManageActivity : AppCompatActivity() {
         val password = binding.editPassword.text.toString()
 
         if (ssid.isEmpty()) {
-            binding.layoutSsid.error = "Please enter WiFi SSID"
+            binding.layoutSsid.error = "[WF-E06] Please enter WiFi SSID"
             return
         }
         binding.layoutSsid.error = null
 
         if (securityIndex != 3 && password.isEmpty()) {
-            binding.layoutPassword.error = "Please enter password"
+            binding.layoutPassword.error = "[WF-E07] Please enter password"
             return
         }
         binding.layoutPassword.error = null
 
         val bt = btService
         if (bt == null || !bt.isConnected) {
-            Toast.makeText(this, "Bluetooth not connected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "[WF-E08] Bluetooth not connected", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -204,7 +264,7 @@ class WifiManageActivity : AppCompatActivity() {
 
                 when {
                     response == null -> {
-                        Toast.makeText(this, "No response (timeout)", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "[WF-E09] No response (timeout)", Toast.LENGTH_SHORT).show()
                         updateWifiStatus(ssid, "Timeout")
                     }
                     response == "CONNECT_OK" -> {
@@ -213,7 +273,7 @@ class WifiManageActivity : AppCompatActivity() {
                     }
                     response.startsWith("CONNECT_FAIL:") -> {
                         val reason = response.removePrefix("CONNECT_FAIL:")
-                        Toast.makeText(this, "WiFi failed: $reason", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "[WF-E10] WiFi failed: $reason", Toast.LENGTH_LONG).show()
                         updateWifiStatus(ssid, "Failed: $reason")
                     }
                     else -> {
@@ -232,7 +292,7 @@ class WifiManageActivity : AppCompatActivity() {
     private fun disconnectWifi() {
         val bt = btService
         if (bt == null || !bt.isConnected) {
-            Toast.makeText(this, "Bluetooth not connected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "[WF-E11] Bluetooth not connected", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -345,8 +405,7 @@ class WifiManageActivity : AppCompatActivity() {
                 // Handle disconnect in this activity
                 if (!connected) {
                     runOnUiThread {
-                        Toast.makeText(this, "Bluetooth connection lost", Toast.LENGTH_LONG).show()
-                        setButtonsEnabled(false)
+                        onBluetoothLost()
                     }
                 }
             }
@@ -354,13 +413,18 @@ class WifiManageActivity : AppCompatActivity() {
         // Check if already disconnected
         if (bt == null || !bt.isConnected) {
             setButtonsEnabled(false)
+            updateBtStatusIndicator(false)
         } else {
             setButtonsEnabled(true)
+            updateBtStatusIndicator(true)
+            // Start periodic health check
+            startHealthCheck()
         }
     }
 
     override fun onPause() {
-        // Restore original callback
+        // Stop health check and restore original callback
+        stopHealthCheck()
         btService?.onConnectionChange = originalConnectionCallback
         originalConnectionCallback = null
         super.onPause()

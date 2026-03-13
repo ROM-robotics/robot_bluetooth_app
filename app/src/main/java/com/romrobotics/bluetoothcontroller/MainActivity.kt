@@ -1,6 +1,7 @@
 package com.romrobotics.bluetoothcontroller
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -59,6 +60,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Bluetooth enable launcher
+    private val enableBtLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Toast.makeText(this, "Bluetooth enabled", Toast.LENGTH_SHORT).show()
+            setUiEnabled(true)
+        } else {
+            Toast.makeText(this, "[MA-E07] Bluetooth must be enabled to use this app", Toast.LENGTH_LONG).show()
+            setUiEnabled(false)
+        }
+    }
+
     // Camera permission launcher
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -66,7 +80,7 @@ class MainActivity : AppCompatActivity() {
         if (granted) {
             launchQrScanner()
         } else {
-            Toast.makeText(this, "Camera permission is required for QR scanning", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "[MA-E01] Camera permission is required for QR scanning", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -86,7 +100,7 @@ class MainActivity : AppCompatActivity() {
         btService.onConnectionChange = { connected ->
             updateConnectionStatus(connected)
             if (!connected && wasConnected) {
-                Toast.makeText(this, "Bluetooth disconnected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "[MA-E02] Bluetooth disconnected", Toast.LENGTH_SHORT).show()
             }
             wasConnected = connected
         }
@@ -97,20 +111,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         btService.onConnectionError = { errorMsg ->
-            Toast.makeText(this, "Connection failed: $errorMsg", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "[MA-E03] Connection failed: $errorMsg", Toast.LENGTH_LONG).show()
         }
 
         // Request Bluetooth permissions
         requestBluetoothPermissions()
 
-        // Load saved MAC address
-        val savedMac = prefs.getString(KEY_DEVICE_MAC, "") ?: ""
-        if (savedMac.isNotEmpty()) {
-            binding.editMacAddress.setText(savedMac)
-        }
+        // Load saved MAC address (default: robot's BT address)
+        val savedMac = prefs.getString(KEY_DEVICE_MAC, "88:D8:2E:76:DD:5A") ?: "88:D8:2E:76:DD:5A"
+        binding.editMacAddress.setText(savedMac)
 
         setupButtons()
         updateConnectionStatus(false)
+
+        // Check Bluetooth is enabled
+        checkBluetoothEnabled()
     }
 
     // ============================================
@@ -127,17 +142,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Connect button -> connect BT and go to WifiManageActivity
+        // Connect button -> connect BT, navigate only after connected
         binding.btnConnect.setOnClickListener {
             val mac = binding.editMacAddress.text.toString().trim()
 
             if (mac.isEmpty()) {
-                binding.layoutMacAddress.error = "Please enter MAC address"
+                binding.layoutMacAddress.error = "[MA-E04] Please enter MAC address"
                 return@setOnClickListener
             }
 
             if (!isValidMac(mac)) {
-                binding.layoutMacAddress.error = "Invalid format (XX:XX:XX:XX:XX:XX)"
+                binding.layoutMacAddress.error = "[MA-E05] Invalid format (XX:XX:XX:XX:XX:XX)"
                 return@setOnClickListener
             }
 
@@ -150,14 +165,31 @@ class MainActivity : AppCompatActivity() {
             binding.btnConnect.isEnabled = false
             binding.btnConnect.text = "Connecting..."
 
+            // Set up one-time callback to navigate on successful connection
+            btService.onConnectionChange = { connected ->
+                updateConnectionStatus(connected)
+                if (connected) {
+                    // Navigate to WiFi Management activity only when connected
+                    val intent = Intent(this, WifiManageActivity::class.java)
+                    startActivity(intent)
+                    wasConnected = true
+                } else {
+                    if (wasConnected) {
+                        Toast.makeText(this, "[MA-E06] Bluetooth disconnected", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // Connection attempt failed — re-enable button
+                        runOnUiThread {
+                            binding.btnConnect.isEnabled = true
+                            binding.btnConnect.text = getString(R.string.connect)
+                        }
+                    }
+                }
+            }
+
             // Connect via Bluetooth SPP
             btService.connect(mac)
 
             Toast.makeText(this, "Connecting to $mac ...", Toast.LENGTH_SHORT).show()
-
-            // Navigate to WiFi Management activity
-            val intent = Intent(this, WifiManageActivity::class.java)
-            startActivity(intent)
         }
     }
 
@@ -204,6 +236,35 @@ class MainActivity : AppCompatActivity() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * Check if Bluetooth is enabled. If not, prompt user to enable it.
+     * UI is disabled until Bluetooth is turned on.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun checkBluetoothEnabled() {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            Toast.makeText(this, "[MA-E08] This device does not support Bluetooth", Toast.LENGTH_LONG).show()
+            setUiEnabled(false)
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            setUiEnabled(false)
+            Toast.makeText(this, "[MA-E07] Please enable Bluetooth to continue", Toast.LENGTH_LONG).show()
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            enableBtLauncher.launch(enableBtIntent)
+        } else {
+            setUiEnabled(true)
+        }
+    }
+
+    private fun setUiEnabled(enabled: Boolean) {
+        binding.btnConnect.isEnabled = enabled
+        binding.btnCameraScan.isEnabled = enabled
+        binding.editMacAddress.isEnabled = enabled
+    }
+
     // ============================================
     // Bluetooth Permissions
     // ============================================
@@ -242,8 +303,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Restore default connection callback (stop auto-navigation)
+        btService.onConnectionChange = { connected ->
+            updateConnectionStatus(connected)
+            if (!connected && wasConnected) {
+                Toast.makeText(this, "[MA-E02] Bluetooth disconnected", Toast.LENGTH_SHORT).show()
+            }
+            wasConnected = connected
+        }
         // Refresh connection status when returning from WifiManageActivity
         updateConnectionStatus(btService.isConnected)
+
+        // Re-check Bluetooth state every time activity resumes
+        checkBluetoothEnabled()
     }
 
     override fun onDestroy() {

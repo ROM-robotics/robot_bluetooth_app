@@ -84,14 +84,14 @@ class BluetoothService(private val context: Context) {
         Thread {
             try {
                 val adapter = bluetoothAdapter
-                    ?: throw IOException("Bluetooth adapter not available")
+                    ?: throw IOException("[BT-E01] Bluetooth adapter not available")
 
                 if (!adapter.isEnabled) {
-                    throw IOException("Bluetooth is not enabled")
+                    throw IOException("[BT-E02] Bluetooth is not enabled")
                 }
 
                 val device = adapter.getRemoteDevice(macAddress)
-                    ?: throw IOException("Device not found: $macAddress")
+                    ?: throw IOException("[BT-E03] Device not found: $macAddress")
 
                 // Cancel discovery to speed up connection
                 adapter.cancelDiscovery()
@@ -115,10 +115,10 @@ class BluetoothService(private val context: Context) {
                 startReadThread()
 
             } catch (e: Exception) {
-                Log.e(TAG, "Connection failed: ${e.message}")
+                Log.e(TAG, "[BT-E04] Connection failed: ${e.message}")
                 isConnected = false
                 closeSocket()
-                val errorMsg = e.message ?: "Unknown error"
+                val errorMsg = e.message ?: "[BT-E04] Unknown error"
                 mainHandler.post {
                     onConnectionError?.invoke(errorMsg)
                     onConnectionChange?.invoke(false)
@@ -157,7 +157,7 @@ class BluetoothService(private val context: Context) {
      */
     fun send(data: String) {
         if (!isConnected || outputStream == null) {
-            Log.w(TAG, "Cannot send — not connected")
+            Log.w(TAG, "[BT-E05] Cannot send — not connected")
             return
         }
 
@@ -167,7 +167,7 @@ class BluetoothService(private val context: Context) {
                 outputStream?.flush()
                 Log.d(TAG, "Sent: $data")
             } catch (e: IOException) {
-                Log.e(TAG, "Send failed: ${e.message}")
+                Log.e(TAG, "[BT-E06] Send failed: ${e.message}")
                 handleDisconnect()
             }
         }.start()
@@ -183,7 +183,7 @@ class BluetoothService(private val context: Context) {
      */
     fun sendAndReceive(command: String, timeoutMs: Long = RESPONSE_TIMEOUT_MS): String? {
         if (!isConnected || outputStream == null) {
-            Log.w(TAG, "Cannot sendAndReceive — not connected")
+            Log.w(TAG, "[BT-E07] Cannot sendAndReceive — not connected")
             return null
         }
 
@@ -207,11 +207,11 @@ class BluetoothService(private val context: Context) {
                 Log.d(TAG, "Received (sync): $resp")
                 resp
             } else {
-                Log.w(TAG, "Response timeout for: $command")
+                Log.w(TAG, "[BT-E08] Response timeout for: $command")
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "sendAndReceive failed: ${e.message}")
+            Log.e(TAG, "[BT-E09] sendAndReceive failed: ${e.message}")
             pendingResponse.set(null)
             return null
         }
@@ -228,7 +228,7 @@ class BluetoothService(private val context: Context) {
                 outputStream?.write(data)
                 outputStream?.flush()
             } catch (e: IOException) {
-                Log.e(TAG, "Send bytes failed: ${e.message}")
+                Log.e(TAG, "[BT-E10] Send bytes failed: ${e.message}")
                 handleDisconnect()
             }
         }.start()
@@ -276,7 +276,7 @@ class BluetoothService(private val context: Context) {
                     }
                 } catch (e: IOException) {
                     if (isConnected) {
-                        Log.e(TAG, "Read error: ${e.message}")
+                        Log.e(TAG, "[BT-E11] Read error: ${e.message}")
                         handleDisconnect()
                     }
                     break
