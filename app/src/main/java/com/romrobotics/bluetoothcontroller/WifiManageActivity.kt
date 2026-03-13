@@ -41,35 +41,37 @@ class WifiManageActivity : AppCompatActivity() {
     private var consecutiveFailures = 0
     private val MAX_CONSECUTIVE_FAILURES = 2
 
-    private val btHealthCheckRunnable: Runnable = object : Runnable {
-        override fun run() {
-            val bt = btService
-            if (bt == null || !bt.isConnected) {
-                onBluetoothLost()
-                return
-            }
+    private fun scheduleNextHealthCheck() {
+        healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
+    }
 
-            // Send PING on background thread to verify connection is alive
-            Thread {
-                val response = bt.sendAndReceive("PING", timeoutMs = 4000)
-                runOnUiThread {
-                    if (response == "PONG") {
-                        consecutiveFailures = 0
-                        updateBtStatusIndicator(true)
-                    } else {
-                        consecutiveFailures++
-                        android.util.Log.w("WifiManageActivity",
-                            "[WF-E13] PING failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)")
-                        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                            onBluetoothLost()
-                            return@runOnUiThread
-                        }
-                    }
-                    // Schedule next check
-                    healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
-                }
-            }.start()
+    private val btHealthCheckRunnable = Runnable {
+        val bt = btService
+        if (bt == null || !bt.isConnected) {
+            onBluetoothLost()
+            return@Runnable
         }
+
+        // Send PING on background thread to verify connection is alive
+        Thread {
+            val response = bt.sendAndReceive("PING", timeoutMs = 4000)
+            runOnUiThread {
+                if (response == "PONG") {
+                    consecutiveFailures = 0
+                    updateBtStatusIndicator(true)
+                } else {
+                    consecutiveFailures++
+                    android.util.Log.w("WifiManageActivity",
+                        "[WF-E13] PING failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)")
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        onBluetoothLost()
+                        return@runOnUiThread
+                    }
+                }
+                // Schedule next check
+                scheduleNextHealthCheck()
+            }
+        }.start()
     }
 
     private fun onBluetoothLost() {
