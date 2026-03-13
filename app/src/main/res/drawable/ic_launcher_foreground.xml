@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Background -->
+    <path
+        android:fillColor="#0A0A0A"
+        android:pathData="M0,0h108v108H0z" />
+    <!-- Robot body -->
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M34,40 L74,40 L74,75 L34,75 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#00C8FF" />
+    <!-- Robot head -->
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M40,28 L68,28 L68,40 L40,40 Z" />
+    <!-- Robot eyes -->
+    <path
+        android:fillColor="#0A0A0A"
+        android:pathData="M46,32 A2,2 0 1,1 50,32 A2,2 0 1,1 46,32" />
+    <path
+        android:fillColor="#0A0A0A"
+        android:pathData="M58,32 A2,2 0 1,1 62,32 A2,2 0 1,1 58,32" />
+    <!-- Antenna -->
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M53,22 L55,22 L55,28 L53,28 Z" />
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M51,20 A3,3 0 1,1 57,20 A3,3 0 1,1 51,20" />
+    <!-- Bluetooth symbol -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,46 L80,66 L86,60 L80,54 L86,48 L80,42 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#00C8FF" />
+    <!-- Wheels -->
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M30,65 A4,8 0 1,1 30,80 A4,8 0 1,1 30,65" />
+    <path
+        android:fillColor="#00C8FF"
+        android:pathData="M74,65 A4,8 0 1,1 74,80 A4,8 0 1,1 74,65" />
+</vector>

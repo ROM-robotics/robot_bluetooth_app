@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BT Robot Controller</string>
+    <string name="main_description">Enter Bluetooth MAC address or scan QR code to connect to your robot.</string>
+    <string name="hint_mac_address">MAC Address (XX:XX:XX:XX:XX:XX)</string>
+    <string name="scan_qr_code">Scan QR Code</string>
+    <string name="bluetooth_status">Bluetooth Connection</string>
+    <string name="not_connected">Not Connected</string>
+    <string name="connected">Connected</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="wifi_management">WiFi Management</string>
+
+    <!-- WiFi Activity -->
+    <string name="wifi_status_title">Robot WiFi Status</string>
+    <string name="scan_wifi_networks">Scan WiFi Networks</string>
+    <string name="hint_wifi_ssid">WiFi SSID (Network Name)</string>
+    <string name="security_type">Security Type</string>
+    <string name="hint_wifi_password">Password</string>
+    <string name="connect_wifi">Connect WiFi</string>
+    <string name="disconnect_wifi">Disconnect</string>
+    <string name="quit_app">Quit App</string>
+
+    <string name="company_name">ROM-Dynamics Co.,Ltd</string>
+</resources>
