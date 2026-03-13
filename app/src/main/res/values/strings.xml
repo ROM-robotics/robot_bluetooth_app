@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BT Robot Controller</string>
+    <string name="app_name">Wifi Changer</string>
     <string name="main_description">Enter Bluetooth MAC address or scan QR code to connect to your robot.</string>
     <string name="hint_mac_address">MAC Address (XX:XX:XX:XX:XX:XX)</string>
     <string name="scan_qr_code">Scan QR Code</string>

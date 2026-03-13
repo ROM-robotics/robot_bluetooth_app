@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Connect Bluetooth button
+        // Connect button -> connect BT and go to WifiManageActivity
         binding.btnConnect.setOnClickListener {
             val mac = binding.editMacAddress.text.toString().trim()
 
@@ -154,16 +154,8 @@ class MainActivity : AppCompatActivity() {
             btService.connect(mac)
 
             Toast.makeText(this, "Connecting to $mac ...", Toast.LENGTH_SHORT).show()
-        }
 
-        // Disconnect button
-        binding.btnDisconnect.setOnClickListener {
-            btService.disconnect()
-            Toast.makeText(this, "Disconnected", Toast.LENGTH_SHORT).show()
-        }
-
-        // WiFi Management button
-        binding.btnWifiManage.setOnClickListener {
+            // Navigate to WiFi Management activity
             val intent = Intent(this, WifiManageActivity::class.java)
             startActivity(intent)
         }
@@ -191,27 +183,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateConnectionStatus(connected: Boolean) {
         runOnUiThread {
-            if (connected) {
-                binding.textConnectionStatus.text = "Connected"
-                binding.textConnectionStatus.setTextColor(
-                    ContextCompat.getColor(this, R.color.status_green)
-                )
-                binding.btnConnect.text = getString(R.string.connect)
-                binding.btnConnect.isEnabled = false
-                binding.btnDisconnect.isEnabled = true
-                binding.btnWifiManage.isEnabled = true
-                binding.btnWifiManage.alpha = 1.0f
-            } else {
-                binding.textConnectionStatus.text = "Not Connected"
-                binding.textConnectionStatus.setTextColor(
-                    ContextCompat.getColor(this, R.color.emergency_red)
-                )
-                binding.btnConnect.text = getString(R.string.connect)
-                binding.btnConnect.isEnabled = true
-                binding.btnDisconnect.isEnabled = false
-                binding.btnWifiManage.isEnabled = false
-                binding.btnWifiManage.alpha = 0.5f
-            }
+            binding.btnConnect.text = getString(R.string.connect)
+            binding.btnConnect.isEnabled = !connected
         }
     }
 
