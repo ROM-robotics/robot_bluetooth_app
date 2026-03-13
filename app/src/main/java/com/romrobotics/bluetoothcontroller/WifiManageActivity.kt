@@ -41,7 +41,7 @@ class WifiManageActivity : AppCompatActivity() {
     private var consecutiveFailures = 0
     private val MAX_CONSECUTIVE_FAILURES = 2
 
-    private val btHealthCheckRunnable = object : Runnable {
+    private val btHealthCheckRunnable: Runnable = object : Runnable {
         override fun run() {
             val bt = btService
             if (bt == null || !bt.isConnected) {
@@ -66,7 +66,7 @@ class WifiManageActivity : AppCompatActivity() {
                         }
                     }
                     // Schedule next check
-                    healthCheckHandler.postDelayed(this@btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
+                    healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
                 }
             }.start()
         }
