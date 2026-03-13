@@ -40,20 +40,28 @@ jobs:
         id: tag
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Rename APKs with version
+        run: |
+          TAG="${{ steps.tag.outputs.TAG_NAME }}"
+          cp app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/WifiChanger-${TAG}-debug.apk"
+          cp app/build/outputs/apk/release/app-release-unsigned.apk "app/build/outputs/apk/release/WifiChanger-${TAG}-release.apk"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.TAG_NAME }}
-          name: "Release ${{ steps.tag.outputs.TAG_NAME }}"
+          name: "Wifi Changer ${{ steps.tag.outputs.TAG_NAME }}"
           body: |
-            ## BT Robot Controller ${{ steps.tag.outputs.TAG_NAME }}
+            ## Wifi Changer ${{ steps.tag.outputs.TAG_NAME }}
+
+            Full APK build (not an update — install directly).
 
             ### Downloads
-            - **debug APK** - for testing
-            - **release APK** - for production (unsigned)
+            - **WifiChanger-${{ steps.tag.outputs.TAG_NAME }}-debug.apk** — for testing
+            - **WifiChanger-${{ steps.tag.outputs.TAG_NAME }}-release.apk** — for production (unsigned)
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/apk/debug/WifiChanger-${{ steps.tag.outputs.TAG_NAME }}-debug.apk
+            app/build/outputs/apk/release/WifiChanger-${{ steps.tag.outputs.TAG_NAME }}-release.apk
           draft: false
           prerelease: false
         env:
