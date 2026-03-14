@@ -36,6 +36,8 @@ class BluetoothService(private val context: Context) {
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val CONNECT_TIMEOUT_MS = 8000L
         private const val RESPONSE_TIMEOUT_MS = 30000L
+        // Default RFCOMM channel (must match server's channel)
+        private const val RFCOMM_CHANNEL = 1
     }
 
     private var bluetoothAdapter: BluetoothAdapter? = null
@@ -98,8 +100,50 @@ class BluetoothService(private val context: Context) {
 
                 Log.d(TAG, "Connecting to $macAddress ...")
 
-                socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                socket?.connect()
+                // Strategy 1: Try insecure RFCOMM via UUID (no encryption required)
+                var connected = false
+                try {
+                    Log.d(TAG, "Trying createInsecureRfcommSocketToServiceRecord...")
+                    socket = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID)
+                    socket?.connect()
+                    connected = true
+                    Log.d(TAG, "Connected via insecure RFCOMM UUID")
+                } catch (e1: IOException) {
+                    Log.w(TAG, "Insecure UUID failed: ${e1.message}")
+                    closeSocket()
+
+                    // Strategy 2: Try secure RFCOMM via UUID
+                    try {
+                        Log.d(TAG, "Trying createRfcommSocketToServiceRecord...")
+                        socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+                        socket?.connect()
+                        connected = true
+                        Log.d(TAG, "Connected via secure RFCOMM UUID")
+                    } catch (e2: IOException) {
+                        Log.w(TAG, "Secure UUID failed: ${e2.message}")
+                        closeSocket()
+
+                        // Strategy 3: Direct channel connection via reflection (bypasses SDP)
+                        try {
+                            Log.d(TAG, "Trying direct RFCOMM channel $RFCOMM_CHANNEL via reflection...")
+                            val method = device.javaClass.getMethod(
+                                "createInsecureRfcommSocket",
+                                Int::class.javaPrimitiveType
+                            )
+                            socket = method.invoke(device, RFCOMM_CHANNEL) as BluetoothSocket
+                            socket?.connect()
+                            connected = true
+                            Log.d(TAG, "Connected via direct RFCOMM channel $RFCOMM_CHANNEL")
+                        } catch (e3: Exception) {
+                            Log.e(TAG, "Direct channel failed: ${e3.message}")
+                            closeSocket()
+                        }
+                    }
+                }
+
+                if (!connected) {
+                    throw IOException("[BT-E04] All connection methods failed for $macAddress")
+                }
 
                 outputStream = socket?.outputStream
                 inputStream = socket?.inputStream
