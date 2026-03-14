@@ -18,6 +18,9 @@ import com.romrobotics.bluetoothcontroller.databinding.ActivityWifiManageBinding
  *   DISCONNECT_WIFI              → DISCONNECT_OK / DISCONNECT_OK:NOT_CONNECTED / DISCONNECT_FAIL:reason
  *   CURRENT_WIFI                 → CURRENT_WIFI:ssid:INTERNET_OK / CURRENT_WIFI:ssid:NO_INTERNET / CURRENT_WIFI:NOT_CONNECTED
  *
+ * Server push (unsolicited):
+ *   WIFI_CHANGED:ssid:INTERNET_OK / WIFI_CHANGED:ssid:NO_INTERNET / WIFI_CHANGED:NOT_CONNECTED
+ *
  * Known = "Y" for saved/previously connected networks, "N" otherwise.
  * Known networks can reconnect without password.
  */
@@ -37,6 +40,9 @@ class WifiManageActivity : AppCompatActivity() {
 
     /** Saved original connection callback from MainActivity (to restore on pause) */
     private var originalConnectionCallback: ((Boolean) -> Unit)? = null
+
+    /** Saved original data received callback from MainActivity (to restore on pause) */
+    private var originalDataCallback: ((String) -> Unit)? = null
 
     private fun onBluetoothLost() {
         Toast.makeText(this, "[WF-E12] Bluetooth connection lost", Toast.LENGTH_LONG).show()
@@ -88,9 +94,13 @@ class WifiManageActivity : AppCompatActivity() {
 
         // Quit app button
         binding.btnQuit.setOnClickListener {
-            // Disconnect Bluetooth before quitting
+            // Remove connection callback to prevent MA-E06 toast during intentional quit
+            btService?.onConnectionChange = null
+            btService?.onDataReceived = null
             btService?.disconnect()
             finishAffinity()
+            // Kill the process to fully remove from memory
+            android.os.Process.killProcess(android.os.Process.myPid())
         }
     }
 
@@ -392,6 +402,28 @@ class WifiManageActivity : AppCompatActivity() {
                     }
                 }
             }
+
+            // Listen for server push messages (e.g. WIFI_CHANGED)
+            originalDataCallback = bt.onDataReceived
+            bt.onDataReceived = { data ->
+                if (data.startsWith("WIFI_CHANGED:")) {
+                    val payload = data.removePrefix("WIFI_CHANGED:")
+                    runOnUiThread {
+                        if (payload == "NOT_CONNECTED") {
+                            updateWifiStatus("\u2014", "Not connected")
+                        } else {
+                            val parts = payload.split(":", limit = 2)
+                            val ssid = parts[0]
+                            val internet = parts.getOrElse(1) { "" }
+                            val internetStatus = if (internet == "INTERNET_OK") "Connected \u2714 Internet" else "Connected \u2716 No Internet"
+                            updateWifiStatus(ssid, internetStatus)
+                        }
+                    }
+                } else {
+                    // Forward other data to original callback
+                    originalDataCallback?.invoke(data)
+                }
+            }
         }
         // Check if already disconnected
         if (bt == null || !bt.isConnected) {
@@ -404,9 +436,11 @@ class WifiManageActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        // Restore original callback
+        // Restore original callbacks
         btService?.onConnectionChange = originalConnectionCallback
+        btService?.onDataReceived = originalDataCallback
         originalConnectionCallback = null
+        originalDataCallback = null
         super.onPause()
     }
 

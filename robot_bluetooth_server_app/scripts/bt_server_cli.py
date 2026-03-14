@@ -10,6 +10,7 @@ import sys
 import signal
 import threading
 import argparse
+import time
 
 # D-Bus imports for auto-pairing agent
 try:
@@ -94,6 +95,12 @@ class BluetoothServerCLI:
         self.connected_device = None
         self.connection_status = "disconnected"
         self.cleanup_pending = False
+
+        # WiFi monitor state
+        self._last_known_ssid = None
+        self._wifi_monitor_thread = None
+        self._wifi_monitor_stop = threading.Event()
+        self._client_sock_lock = threading.Lock()
         
         # Track connection attempts for detecting pairing issues
         self.connection_attempts = {}  # mac -> list of timestamps
@@ -683,6 +690,72 @@ exit
                 continue
         return "NO_INTERNET"
 
+    # ============================================
+    # WiFi Monitor (push SSID changes to client)
+    # ============================================
+
+    def _get_current_ssid(self):
+        """Get current connected WiFi SSID, or None if not connected."""
+        try:
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"],
+                capture_output=True, text=True, check=False, timeout=5
+            )
+            for line in result.stdout.strip().split("\n"):
+                if line.startswith("yes:"):
+                    return line.split(":", 1)[1]
+        except Exception:
+            pass
+        return None
+
+    def _send_push(self, message):
+        """Send an unsolicited push message to the connected client."""
+        with self._client_sock_lock:
+            sock = self.client_sock
+            if sock is None:
+                return
+            try:
+                sock.send((message + "\n").encode("utf-8"))
+                print(f"  → Push: {message}")
+            except Exception as e:
+                print(f"  ⚠ Push send failed: {e}")
+
+    def _wifi_monitor_loop(self):
+        """Background loop that checks WiFi SSID every 5 seconds
+        and pushes WIFI_CHANGED to client when it changes."""
+        INTERVAL = 5  # seconds
+        while not self._wifi_monitor_stop.wait(INTERVAL):
+            if self.client_sock is None:
+                break
+            current_ssid = self._get_current_ssid()
+            if current_ssid != self._last_known_ssid:
+                old = self._last_known_ssid
+                self._last_known_ssid = current_ssid
+                if current_ssid is None:
+                    self._send_push("WIFI_CHANGED:NOT_CONNECTED")
+                else:
+                    internet = self._check_internet_access()
+                    self._send_push(f"WIFI_CHANGED:{current_ssid}:{internet}")
+                print(f"  [WiFi Monitor] SSID changed: {old} → {current_ssid}")
+
+    def _start_wifi_monitor(self):
+        """Start WiFi monitor background thread."""
+        self._wifi_monitor_stop.clear()
+        self._last_known_ssid = self._get_current_ssid()
+        self._wifi_monitor_thread = threading.Thread(
+            target=self._wifi_monitor_loop, daemon=True
+        )
+        self._wifi_monitor_thread.start()
+        print("  [WiFi Monitor] Started")
+
+    def _stop_wifi_monitor(self):
+        """Stop WiFi monitor background thread."""
+        self._wifi_monitor_stop.set()
+        if self._wifi_monitor_thread is not None:
+            self._wifi_monitor_thread.join(timeout=3)
+            self._wifi_monitor_thread = None
+        print("  [WiFi Monitor] Stopped")
+
     def handle_client(self, client_sock, client_info):
         """Handle a connected client."""
         # Extract MAC address from client_info tuple
@@ -694,6 +767,9 @@ exit
         self.client_sock = client_sock
         self.connection_status = "connected"
         self.connected_device = client_mac
+
+        # Start WiFi monitor to push SSID changes
+        self._start_wifi_monitor()
         
         try:
             while self.running:
@@ -704,12 +780,15 @@ exit
                 print(f"  ← Received: {cmd.strip()}")
                 response = self.handle_command(cmd)
                 print(f"  → Sending: {response}")
-                client_sock.send((response + "\n").encode("utf-8"))
+                with self._client_sock_lock:
+                    client_sock.send((response + "\n").encode("utf-8"))
         except ConnectionResetError:
             print("  ⚠ Connection reset by client")
         except Exception as e:
             print(f"  ⚠ Client error: {e}")
         finally:
+            # Stop WiFi monitor before cleanup
+            self._stop_wifi_monitor()
             client_sock.close()
             self.client_sock = None
             self.connection_status = "disconnected"
