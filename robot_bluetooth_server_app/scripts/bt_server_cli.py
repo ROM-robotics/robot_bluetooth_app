@@ -302,7 +302,7 @@ class BluetoothServerCLI:
         print(f"[2/4] Configuring Bluetooth adapter as '{self.device_name}'...")
 
         # Step 1: Bring adapter up
-        subprocess.run(["sudo", "hciconfig", "hci0", "up"], capture_output=True, check=False)
+        subprocess.run(["hciconfig", "hci0", "up"], capture_output=True, check=False)
 
         # Step 2: Use bluetoothctl for all settings (more reliable than hciconfig)
         bt_script = f"""power on
@@ -324,12 +324,12 @@ exit
         )
 
         # Step 3: Also set via hciconfig as backup
-        subprocess.run(["sudo", "hciconfig", "hci0", "piscan"], capture_output=True, check=False)
-        subprocess.run(["sudo", "hciconfig", "hci0", "sspmode", "1"], capture_output=True, check=False)
-        subprocess.run(["sudo", "hciconfig", "hci0", "name", self.device_name], capture_output=True, check=False)
+        subprocess.run(["hciconfig", "hci0", "piscan"], capture_output=True, check=False)
+        subprocess.run(["hciconfig", "hci0", "sspmode", "1"], capture_output=True, check=False)
+        subprocess.run(["hciconfig", "hci0", "name", self.device_name], capture_output=True, check=False)
 
         # Step 4: Force class of device update
-        subprocess.run(["sudo", "hciconfig", "hci0", "class", "0x000100"], capture_output=True, check=False)
+        subprocess.run(["hciconfig", "hci0", "class", "0x000100"], capture_output=True, check=False)
 
         print(f"  ✓ Adapter configured as '{self.device_name}'")
         print("  ✓ Discoverable (no timeout)")
@@ -847,9 +847,9 @@ exit
         except Exception as e:
             print(f"  ✗ Failed to create socket: {e}")
             print("\nTroubleshooting:")
-            print("  1. sudo hciconfig hci0 up")
-            print("  2. sudo systemctl restart bluetooth")
-            print("  3. Run this script with sudo")
+            print("  1. hciconfig hci0 up")
+            print("  2. systemctl restart bluetooth")
+            print("  3. Check Bluetooth adapter is present")
             return False
 
         # Step 4: Register SDP
@@ -924,7 +924,18 @@ exit
         print("Server stopped.")
 
 
+def ensure_root():
+    """Re-exec as root if not already. Avoids repeated sudo password prompts."""
+    import os
+    if os.geteuid() != 0:
+        print("[!] Root privileges required. Re-launching with sudo ...")
+        os.execvp("sudo", ["sudo"] + sys.argv)
+        # execvp replaces the process; code below never runs
+
+
 def main():
+    ensure_root()
+
     parser = argparse.ArgumentParser(
         description="Bluetooth RFCOMM Server - No Passkey Required"
     )
