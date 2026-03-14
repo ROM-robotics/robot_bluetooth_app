@@ -453,6 +453,19 @@ exit
                 # Enable WiFi
                 self.run_nmcli_command(["nmcli", "radio", "wifi", "on"], timeout=3)
             
+            # Get saved/known connection profiles
+            known_ssids = set()
+            rc_known, stdout_known, _ = self.run_nmcli_command(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+                timeout=5
+            )
+            if rc_known == 0:
+                for line in stdout_known.strip().split("\n"):
+                    if line:
+                        kparts = line.split(":")
+                        if len(kparts) >= 2 and "wireless" in kparts[1].lower():
+                            known_ssids.add(kparts[0])
+            
             # Scan for networks
             returncode, stdout, stderr = self.run_nmcli_command(
                 ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", "yes"],
@@ -472,7 +485,8 @@ exit
                         seen_ssids.add(ssid)
                         signal = parts[1] if len(parts) > 1 else "0"
                         security = parts[2] if len(parts) > 2 else ""
-                        networks.append(f"{ssid}|{signal}|{security}")
+                        known = "Y" if ssid in known_ssids else "N"
+                        networks.append(f"{ssid}|{signal}|{security}|{known}")
             
             if not networks:
                 return "WIFI_LIST:No networks found"
@@ -524,12 +538,41 @@ exit
                 import time
                 time.sleep(2)
             
-            # Step 3: Delete any existing connection with same SSID
-            print(f"  [WiFi] Removing old connection profile if exists...")
-            self.run_nmcli_command(
-                ["nmcli", "connection", "delete", ssid],
+            # Step 3: Check if this is a known/saved network
+            is_known_network = False
+            rc_known, stdout_known, _ = self.run_nmcli_command(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
                 timeout=5
             )
+            if rc_known == 0:
+                for line in stdout_known.strip().split("\n"):
+                    if line:
+                        kparts = line.split(":")
+                        if len(kparts) >= 2 and kparts[0] == ssid and "wireless" in kparts[1].lower():
+                            is_known_network = True
+                            break
+            
+            # Step 3a: If known network and no new password, try saved profile first
+            if is_known_network and not password:
+                print(f"  [WiFi] Known network detected, trying saved profile...")
+                returncode, stdout, stderr = self.run_nmcli_command(
+                    ["nmcli", "connection", "up", ssid],
+                    timeout=30
+                )
+                if returncode == 0:
+                    print(f"  [WiFi] ✓ Connected using saved profile!")
+                    return "CONNECT_OK"
+                else:
+                    print(f"  [WiFi] Saved profile failed, will need password")
+                    return "CONNECT_FAIL:Saved password no longer works - please enter new password"
+            
+            # Step 3b: New password provided — delete old profile and reconnect fresh
+            if password:
+                print(f"  [WiFi] Removing old connection profile if exists...")
+                self.run_nmcli_command(
+                    ["nmcli", "connection", "delete", ssid],
+                    timeout=5
+                )
             
             # Step 4: Try to connect
             print(f"  [WiFi] Attempting connection...")

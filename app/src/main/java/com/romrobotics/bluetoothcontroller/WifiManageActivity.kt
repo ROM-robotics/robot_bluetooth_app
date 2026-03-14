@@ -16,9 +16,12 @@ import com.romrobotics.bluetoothcontroller.databinding.ActivityWifiManageBinding
  *
  * Server protocol:
  *   PING                         → PONG
- *   SEARCH_WIFI                  → WIFI_LIST:SSID|Signal|Security,...
+ *   SEARCH_WIFI                  → WIFI_LIST:SSID|Signal|Security|Known,...
  *   CONNECT_WIFI:ssid:password   → CONNECT_OK / CONNECT_FAIL:reason
  *   CURRENT_WIFI                 → CURRENT_WIFI:ssid / CURRENT_WIFI:NOT_CONNECTED
+ *
+ * Known = "Y" for saved/previously connected networks, "N" otherwise.
+ * Known networks can reconnect without password.
  */
 class WifiManageActivity : AppCompatActivity() {
 
@@ -26,6 +29,9 @@ class WifiManageActivity : AppCompatActivity() {
 
     /** Track if selected network is open (no password needed) */
     private var isOpenNetwork = false
+
+    /** Track if selected network is a known/saved network on robot */
+    private var isKnownNetwork = false
 
     /** Reference to the shared BluetoothService from MainActivity */
     private val btService: BluetoothService?
@@ -212,8 +218,8 @@ class WifiManageActivity : AppCompatActivity() {
         }
         binding.layoutSsid.error = null
 
-        // Only require password for non-open networks
-        if (!isOpenNetwork && password.isEmpty()) {
+        // Only require password for non-open and non-known networks
+        if (!isOpenNetwork && !isKnownNetwork && password.isEmpty()) {
             binding.layoutPassword.error = "[WF-E07] Please enter password"
             return
         }
@@ -233,8 +239,8 @@ class WifiManageActivity : AppCompatActivity() {
         stopHealthCheck()
 
         Thread {
-            val command = if (isOpenNetwork || password.isEmpty()) {
-                // Open network — no password
+            val command = if (isOpenNetwork || isKnownNetwork && password.isEmpty()) {
+                // Open network or known network with saved password — no password needed
                 "CONNECT_WIFI:$ssid:"
             } else {
                 "CONNECT_WIFI:$ssid:$password"
@@ -323,11 +329,12 @@ class WifiManageActivity : AppCompatActivity() {
     // WiFi List Parsing & Selection
     // ============================================
 
-    data class WifiNetwork(val ssid: String, val signal: String, val security: String)
+    data class WifiNetwork(val ssid: String, val signal: String, val security: String, val isKnown: Boolean = false)
 
     /**
      * Parse WIFI_LIST response.
-     * Format: SSID|Signal|Security,SSID|Signal|Security,...
+     * Format: SSID|Signal|Security|Known,SSID|Signal|Security|Known,...
+     * Known = "Y" for saved/known networks, "N" otherwise
      */
     private fun parseWifiList(listStr: String): List<WifiNetwork> {
         if (listStr.isBlank() || listStr == "No networks found") return emptyList()
@@ -338,7 +345,8 @@ class WifiManageActivity : AppCompatActivity() {
                 WifiNetwork(
                     ssid = parts[0],
                     signal = parts.getOrElse(1) { "?" },
-                    security = parts.getOrElse(2) { "" }
+                    security = parts.getOrElse(2) { "" },
+                    isKnown = parts.getOrElse(3) { "N" } == "Y"
                 )
             } else null
         }
@@ -349,7 +357,10 @@ class WifiManageActivity : AppCompatActivity() {
      * User can select one to fill in the SSID field.
      */
     private fun showWifiSelectionDialog(networks: List<WifiNetwork>) {
-        val displayItems = networks.map { "${it.ssid}  (${it.signal}%)  ${it.security}" }
+        val displayItems = networks.map {
+            val knownTag = if (it.isKnown) " [Saved]" else ""
+            "${it.ssid}  (${it.signal}%)  ${it.security}$knownTag"
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Select WiFi Network")
@@ -360,9 +371,10 @@ class WifiManageActivity : AppCompatActivity() {
                 // Auto-detect open network (no security)
                 val securityStr = selected.security
                 isOpenNetwork = securityStr.isBlank() || securityStr.contains("--") || securityStr.equals("Open", ignoreCase = true)
+                isKnownNetwork = selected.isKnown
 
-                if (isOpenNetwork) {
-                    // Hide password field for open networks
+                if (isOpenNetwork || isKnownNetwork) {
+                    // Hide password field for open or known networks
                     binding.layoutPassword.visibility = View.GONE
                     binding.editPassword.setText("")
                 } else {
@@ -372,7 +384,8 @@ class WifiManageActivity : AppCompatActivity() {
                     binding.editPassword.requestFocus()
                 }
 
-                Toast.makeText(this, "Selected: ${selected.ssid}", Toast.LENGTH_SHORT).show()
+                val statusMsg = if (isKnownNetwork) "Selected: ${selected.ssid} (saved)" else "Selected: ${selected.ssid}"
+                Toast.makeText(this, statusMsg, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()

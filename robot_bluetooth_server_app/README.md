@@ -68,8 +68,8 @@ Bluetooth RFCOMM (SPP) — newline-terminated plain text
 | Command | Response | Description |
 |---------|----------|-------------|
 | `PING` | `PONG` | Connection test |
-| `SEARCH_WIFI` | `WIFI_LIST:SSID\|Signal\|Security,...` | WiFi networks scan |
-| `CONNECT_WIFI:ssid:password` | `CONNECT_OK` / `CONNECT_FAIL:reason` | WiFi ချိတ်ဆက် |
+| `SEARCH_WIFI` | `WIFI_LIST:SSID\|Signal\|Security\|Known,...` | WiFi networks scan (Known=Y/N) |
+| `CONNECT_WIFI:ssid:password` | `CONNECT_OK` / `CONNECT_FAIL:reason` | WiFi ချိတ်ဆက် (known network ဆို password မလို) |
 | `CURRENT_WIFI` | `CURRENT_WIFI:ssid` / `CURRENT_WIFI:NOT_CONNECTED` | လက်ရှိ WiFi စစ်ဆေး |
 
 ## Architecture
