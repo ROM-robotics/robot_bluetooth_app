@@ -1,8 +1,6 @@
 package com.romrobotics.bluetoothcontroller
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -15,7 +13,6 @@ import com.romrobotics.bluetoothcontroller.databinding.ActivityWifiManageBinding
  * Sends WiFi commands to robot PC via Bluetooth RFCOMM.
  *
  * Server protocol:
- *   PING                         → PONG
  *   SEARCH_WIFI                  → WIFI_LIST:SSID|Signal|Security|Known,...
  *   CONNECT_WIFI:ssid:password   → CONNECT_OK:INTERNET_OK / CONNECT_OK:NO_INTERNET / CONNECT_FAIL:reason
  *   CURRENT_WIFI                 → CURRENT_WIFI:ssid:INTERNET_OK / CURRENT_WIFI:ssid:NO_INTERNET / CURRENT_WIFI:NOT_CONNECTED
@@ -40,64 +37,14 @@ class WifiManageActivity : AppCompatActivity() {
     /** Saved original connection callback from MainActivity (to restore on pause) */
     private var originalConnectionCallback: ((Boolean) -> Unit)? = null
 
-    /** Handler for periodic Bluetooth connection health check */
-    private val healthCheckHandler = Handler(Looper.getMainLooper())
-    private val BT_HEALTH_CHECK_INTERVAL_MS = 5000L
-    private var consecutiveFailures = 0
-    private val MAX_CONSECUTIVE_FAILURES = 2
-
-    private fun scheduleNextHealthCheck() {
-        healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
-    }
-
-    private val btHealthCheckRunnable = Runnable {
-        val bt = btService
-        if (bt == null || !bt.isConnected) {
-            onBluetoothLost()
-            return@Runnable
-        }
-
-        // Send PING on background thread to verify connection is alive
-        Thread {
-            val response = bt.sendAndReceive("PING", timeoutMs = 4000)
-            runOnUiThread {
-                if (response == "PONG") {
-                    consecutiveFailures = 0
-                    updateBtStatusIndicator(true)
-                } else {
-                    consecutiveFailures++
-                    android.util.Log.w("WifiManageActivity",
-                        "[WF-E13] PING failed ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES)")
-                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                        onBluetoothLost()
-                        return@runOnUiThread
-                    }
-                }
-                // Schedule next check
-                scheduleNextHealthCheck()
-            }
-        }.start()
-    }
-
     private fun onBluetoothLost() {
         Toast.makeText(this, "[WF-E12] Bluetooth connection lost", Toast.LENGTH_LONG).show()
         setButtonsEnabled(false)
         updateBtStatusIndicator(false)
-        stopHealthCheck()
     }
 
     private fun updateBtStatusIndicator(connected: Boolean) {
         supportActionBar?.subtitle = if (connected) "🔵 BT Connected" else "🔴 BT Disconnected"
-    }
-
-    private fun startHealthCheck() {
-        consecutiveFailures = 0
-        healthCheckHandler.removeCallbacks(btHealthCheckRunnable)
-        healthCheckHandler.postDelayed(btHealthCheckRunnable, BT_HEALTH_CHECK_INTERVAL_MS)
-    }
-
-    private fun stopHealthCheck() {
-        healthCheckHandler.removeCallbacks(btHealthCheckRunnable)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -165,18 +112,12 @@ class WifiManageActivity : AppCompatActivity() {
         binding.btnScanWifi.isEnabled = false
         binding.btnScanWifi.text = "Scanning..."
 
-        // Pause health check to avoid sendAndReceive collision
-        stopHealthCheck()
-
         Thread {
             val response = bt.sendAndReceive("SEARCH_WIFI", timeoutMs = 25000)
 
             runOnUiThread {
                 binding.btnScanWifi.isEnabled = true
                 binding.btnScanWifi.text = getString(R.string.scan_wifi_networks)
-
-                // Resume health check after command completes
-                startHealthCheck()
 
                 if (response == null) {
                     Toast.makeText(this, "[WF-E02] No response from robot (timeout)", Toast.LENGTH_SHORT).show()
@@ -235,9 +176,6 @@ class WifiManageActivity : AppCompatActivity() {
         binding.btnConnectWifi.text = "Connecting..."
         updateWifiStatus(ssid, "Connecting...")
 
-        // Pause health check to avoid sendAndReceive collision
-        stopHealthCheck()
-
         Thread {
             val command = if (isOpenNetwork || isKnownNetwork && password.isEmpty()) {
                 // Open network or known network with saved password — no password needed
@@ -251,9 +189,6 @@ class WifiManageActivity : AppCompatActivity() {
             runOnUiThread {
                 binding.btnConnectWifi.isEnabled = true
                 binding.btnConnectWifi.text = getString(R.string.connect_wifi)
-
-                // Resume health check after command completes
-                startHealthCheck()
 
                 when {
                     response == null -> {
@@ -305,9 +240,6 @@ class WifiManageActivity : AppCompatActivity() {
         val bt = btService
         if (bt == null || !bt.isConnected) return
 
-        // Pause health check to avoid sendAndReceive collision
-        stopHealthCheck()
-
         Thread {
             val response = bt.sendAndReceive("CURRENT_WIFI", timeoutMs = 10000)
 
@@ -326,8 +258,6 @@ class WifiManageActivity : AppCompatActivity() {
                     }
                 }
 
-                // Resume health check after command completes
-                startHealthCheck()
             }
         }.start()
     }
@@ -435,14 +365,11 @@ class WifiManageActivity : AppCompatActivity() {
         } else {
             setButtonsEnabled(true)
             updateBtStatusIndicator(true)
-            // Start periodic health check
-            startHealthCheck()
         }
     }
 
     override fun onPause() {
-        // Stop health check and restore original callback
-        stopHealthCheck()
+        // Restore original callback
         btService?.onConnectionChange = originalConnectionCallback
         originalConnectionCallback = null
         super.onPause()
