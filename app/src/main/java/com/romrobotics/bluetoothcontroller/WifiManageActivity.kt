@@ -15,6 +15,7 @@ import com.romrobotics.bluetoothcontroller.databinding.ActivityWifiManageBinding
  * Server protocol:
  *   SEARCH_WIFI                  → WIFI_LIST:SSID|Signal|Security|Known,...
  *   CONNECT_WIFI:ssid:password   → CONNECT_OK:INTERNET_OK / CONNECT_OK:NO_INTERNET / CONNECT_FAIL:reason
+ *   DISCONNECT_WIFI              → DISCONNECT_OK / DISCONNECT_OK:NOT_CONNECTED / DISCONNECT_FAIL:reason
  *   CURRENT_WIFI                 → CURRENT_WIFI:ssid:INTERNET_OK / CURRENT_WIFI:ssid:NO_INTERNET / CURRENT_WIFI:NOT_CONNECTED
  *
  * Known = "Y" for saved/previously connected networks, "N" otherwise.
@@ -59,7 +60,7 @@ class WifiManageActivity : AppCompatActivity() {
         supportActionBar?.title = "WiFi Management"
 
         setupButtons()
-        updateWifiStatus("—", "Unknown")
+        updateWifiStatus("—", "Checking...")
 
         // Fetch current WiFi status on open
         fetchCurrentWifi()
@@ -216,8 +217,8 @@ class WifiManageActivity : AppCompatActivity() {
     }
 
     /**
-     * Send disconnect WiFi command (not in current server protocol,
-     * but included for future use).
+     * Send DISCONNECT_WIFI command to robot.
+     * Response: DISCONNECT_OK / DISCONNECT_OK:NOT_CONNECTED / DISCONNECT_FAIL:reason
      */
     private fun disconnectWifi() {
         val bt = btService
@@ -226,11 +227,39 @@ class WifiManageActivity : AppCompatActivity() {
             return
         }
 
-        // Server doesn't have a disconnect_wifi command yet,
-        // but we send it for forward compatibility
-        bt.send("DISCONNECT_WIFI")
-        Toast.makeText(this, "WiFi disconnect command sent", Toast.LENGTH_SHORT).show()
-        updateWifiStatus("—", "Disconnected")
+        binding.btnDisconnectWifi.isEnabled = false
+        binding.btnDisconnectWifi.text = "Disconnecting..."
+
+        Thread {
+            val response = bt.sendAndReceive("DISCONNECT_WIFI", timeoutMs = 20000)
+
+            runOnUiThread {
+                binding.btnDisconnectWifi.isEnabled = true
+                binding.btnDisconnectWifi.text = getString(R.string.disconnect_wifi)
+
+                when {
+                    response == null -> {
+                        Toast.makeText(this, "[WF-E14] No response (timeout)", Toast.LENGTH_SHORT).show()
+                    }
+                    response.startsWith("DISCONNECT_OK") -> {
+                        val detail = if (response.contains(":")) response.split(":", limit = 2)[1] else ""
+                        if (detail == "NOT_CONNECTED") {
+                            Toast.makeText(this, "WiFi was not connected", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this, "WiFi disconnected", Toast.LENGTH_SHORT).show()
+                        }
+                        updateWifiStatus("—", "Disconnected")
+                    }
+                    response.startsWith("DISCONNECT_FAIL:") -> {
+                        val reason = response.removePrefix("DISCONNECT_FAIL:")
+                        Toast.makeText(this, "[WF-E15] Disconnect failed: $reason", Toast.LENGTH_LONG).show()
+                    }
+                    else -> {
+                        Toast.makeText(this, "Response: $response", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }.start()
     }
 
     /**
@@ -238,10 +267,13 @@ class WifiManageActivity : AppCompatActivity() {
      */
     private fun fetchCurrentWifi() {
         val bt = btService
-        if (bt == null || !bt.isConnected) return
+        if (bt == null || !bt.isConnected) {
+            updateWifiStatus("—", "BT not connected")
+            return
+        }
 
         Thread {
-            val response = bt.sendAndReceive("CURRENT_WIFI", timeoutMs = 10000)
+            val response = bt.sendAndReceive("CURRENT_WIFI", timeoutMs = 20000)
 
             runOnUiThread {
                 if (response != null && response.startsWith("CURRENT_WIFI:")) {
@@ -256,8 +288,11 @@ class WifiManageActivity : AppCompatActivity() {
                         val internetStatus = if (internet == "INTERNET_OK") "Connected \u2714 Internet" else "Connected \u2716 No Internet"
                         updateWifiStatus(ssid, internetStatus)
                     }
+                } else if (response == null) {
+                    updateWifiStatus("—", "Status check timeout")
+                } else {
+                    updateWifiStatus("—", "Unknown")
                 }
-
             }
         }.start()
     }

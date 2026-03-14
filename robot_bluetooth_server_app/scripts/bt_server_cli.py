@@ -631,6 +631,38 @@ exit
             except Exception as e:
                 return f"ERROR:{e}"
 
+        if cmd_upper == "DISCONNECT_WIFI":
+            try:
+                # Find currently active WiFi device
+                dev_result = subprocess.run(
+                    ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "device"],
+                    capture_output=True, text=True, check=False
+                )
+                wifi_device = None
+                for line in dev_result.stdout.strip().split("\n"):
+                    parts = line.split(":")
+                    if len(parts) >= 3 and parts[1] == "wifi" and parts[2] == "connected":
+                        wifi_device = parts[0]
+                        break
+
+                if wifi_device is None:
+                    return "DISCONNECT_OK:NOT_CONNECTED"
+
+                result = subprocess.run(
+                    ["nmcli", "device", "disconnect", wifi_device],
+                    capture_output=True, text=True, timeout=15, check=False
+                )
+                if result.returncode == 0:
+                    return "DISCONNECT_OK"
+                else:
+                    error_msg = result.stderr.strip() or result.stdout.strip()
+                    first_error = error_msg.split('\n')[0][:100]
+                    return f"DISCONNECT_FAIL:{first_error}"
+            except subprocess.TimeoutExpired:
+                return "DISCONNECT_FAIL:Timeout"
+            except Exception as e:
+                return f"ERROR:{e}"
+
         return f"ERROR:Unknown command '{cmd}'"
 
     def _check_internet_access(self):
@@ -641,9 +673,9 @@ exit
         for target in targets:
             try:
                 result = subprocess.run(
-                    ["ping", "-c", "1", "-W", "3", target],
+                    ["ping", "-c", "1", "-W", "2", target],
                     capture_output=True, text=True, check=False,
-                    timeout=5
+                    timeout=3
                 )
                 if result.returncode == 0:
                     return "INTERNET_OK"
