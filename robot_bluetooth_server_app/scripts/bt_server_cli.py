@@ -561,7 +561,11 @@ exit
                 )
                 if returncode == 0:
                     print(f"  [WiFi] ✓ Connected using saved profile!")
-                    return "CONNECT_OK"
+                    import time
+                    time.sleep(2)
+                    internet = self._check_internet_access()
+                    print(f"  [WiFi] Internet: {internet}")
+                    return f"CONNECT_OK:{internet}"
                 else:
                     print(f"  [WiFi] Saved profile failed, will need password")
                     return "CONNECT_FAIL:Saved password no longer works - please enter new password"
@@ -584,7 +588,12 @@ exit
             
             if returncode == 0:
                 print(f"  [WiFi] ✓ Connected successfully!")
-                return "CONNECT_OK"
+                # Check internet access after successful connection
+                import time
+                time.sleep(2)  # Brief delay for network to stabilize
+                internet = self._check_internet_access()
+                print(f"  [WiFi] Internet: {internet}")
+                return f"CONNECT_OK:{internet}"
             else:
                 # Parse error from stderr or stdout
                 error_msg = (stderr or stdout or "Unknown error").strip()
@@ -615,12 +624,32 @@ exit
                 )
                 for line in result.stdout.strip().split("\n"):
                     if line.startswith("yes:"):
-                        return f"CURRENT_WIFI:{line.split(':', 1)[1]}"
+                        ssid = line.split(':', 1)[1]
+                        internet = self._check_internet_access()
+                        return f"CURRENT_WIFI:{ssid}:{internet}"
                 return "CURRENT_WIFI:NOT_CONNECTED"
             except Exception as e:
                 return f"ERROR:{e}"
 
         return f"ERROR:Unknown command '{cmd}'"
+
+    def _check_internet_access(self):
+        """Check internet connectivity by pinging a reliable host.
+        Returns 'INTERNET_OK' or 'NO_INTERNET'.
+        """
+        targets = ["8.8.8.8", "1.1.1.1"]
+        for target in targets:
+            try:
+                result = subprocess.run(
+                    ["ping", "-c", "1", "-W", "3", target],
+                    capture_output=True, text=True, check=False,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return "INTERNET_OK"
+            except (subprocess.TimeoutExpired, Exception):
+                continue
+        return "NO_INTERNET"
 
     def handle_client(self, client_sock, client_info):
         """Handle a connected client."""

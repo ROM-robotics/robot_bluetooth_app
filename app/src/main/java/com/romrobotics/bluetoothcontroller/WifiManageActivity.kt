@@ -17,8 +17,8 @@ import com.romrobotics.bluetoothcontroller.databinding.ActivityWifiManageBinding
  * Server protocol:
  *   PING                         → PONG
  *   SEARCH_WIFI                  → WIFI_LIST:SSID|Signal|Security|Known,...
- *   CONNECT_WIFI:ssid:password   → CONNECT_OK / CONNECT_FAIL:reason
- *   CURRENT_WIFI                 → CURRENT_WIFI:ssid / CURRENT_WIFI:NOT_CONNECTED
+ *   CONNECT_WIFI:ssid:password   → CONNECT_OK:INTERNET_OK / CONNECT_OK:NO_INTERNET / CONNECT_FAIL:reason
+ *   CURRENT_WIFI                 → CURRENT_WIFI:ssid:INTERNET_OK / CURRENT_WIFI:ssid:NO_INTERNET / CURRENT_WIFI:NOT_CONNECTED
  *
  * Known = "Y" for saved/previously connected networks, "N" otherwise.
  * Known networks can reconnect without password.
@@ -260,9 +260,11 @@ class WifiManageActivity : AppCompatActivity() {
                         Toast.makeText(this, "[WF-E09] No response (timeout)", Toast.LENGTH_SHORT).show()
                         updateWifiStatus(ssid, "Timeout")
                     }
-                    response == "CONNECT_OK" -> {
+                    response.startsWith("CONNECT_OK") -> {
+                        val internet = if (response.contains(":")) response.split(":", limit = 2)[1] else ""
+                        val internetStatus = if (internet == "INTERNET_OK") "Connected \u2714 Internet" else "Connected \u2716 No Internet"
                         Toast.makeText(this, "WiFi connected to $ssid", Toast.LENGTH_SHORT).show()
-                        updateWifiStatus(ssid, "Connected")
+                        updateWifiStatus(ssid, internetStatus)
                     }
                     response.startsWith("CONNECT_FAIL:") -> {
                         val reason = response.removePrefix("CONNECT_FAIL:")
@@ -311,11 +313,16 @@ class WifiManageActivity : AppCompatActivity() {
 
             runOnUiThread {
                 if (response != null && response.startsWith("CURRENT_WIFI:")) {
-                    val ssid = response.removePrefix("CURRENT_WIFI:")
-                    if (ssid == "NOT_CONNECTED") {
+                    val payload = response.removePrefix("CURRENT_WIFI:")
+                    if (payload == "NOT_CONNECTED") {
                         updateWifiStatus("—", "Not connected")
                     } else {
-                        updateWifiStatus(ssid, "Connected")
+                        // Format: ssid:INTERNET_OK or ssid:NO_INTERNET
+                        val parts = payload.split(":", limit = 2)
+                        val ssid = parts[0]
+                        val internet = parts.getOrElse(1) { "" }
+                        val internetStatus = if (internet == "INTERNET_OK") "Connected \u2714 Internet" else "Connected \u2716 No Internet"
+                        updateWifiStatus(ssid, internetStatus)
                     }
                 }
 
