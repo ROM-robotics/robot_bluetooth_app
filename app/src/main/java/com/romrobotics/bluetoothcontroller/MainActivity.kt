@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
         requestBluetoothPermissions()
 
         // Load saved MAC address (default: robot's BT address)
-        val savedMac = prefs.getString(KEY_DEVICE_MAC, "64:BC:58:53:A8:21") ?: "64:BC:58:53:A8:21"
+        val savedMac = prefs.getString(KEY_DEVICE_MAC, "88:D8:2E:76:DD:5A") ?: "88:D8:2E:76:DD:5A"
         binding.editMacAddress.setText(savedMac)
 
         setupButtons()
