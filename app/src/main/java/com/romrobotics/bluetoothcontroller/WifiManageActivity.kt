@@ -4,8 +4,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -26,7 +24,8 @@ class WifiManageActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityWifiManageBinding
 
-    private val securityTypes = arrayOf("WPA2-Personal", "WPA3-Personal", "WEP", "Open (None)")
+    /** Track if selected network is open (no password needed) */
+    private var isOpenNetwork = false
 
     /** Reference to the shared BluetoothService from MainActivity */
     private val btService: BluetoothService?
@@ -106,37 +105,11 @@ class WifiManageActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = "WiFi Management"
 
-        setupSecuritySpinner()
         setupButtons()
         updateWifiStatus("—", "Unknown")
 
         // Fetch current WiFi status on open
         fetchCurrentWifi()
-    }
-
-    // ============================================
-    // Security Type Dropdown
-    // ============================================
-
-    private fun setupSecuritySpinner() {
-        val adapter = ArrayAdapter(
-            this,
-            R.layout.spinner_item_dark,
-            securityTypes
-        ).apply {
-            setDropDownViewResource(R.layout.spinner_dropdown_item_dark)
-        }
-
-        binding.spinnerSecurity.adapter = adapter
-
-        binding.spinnerSecurity.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val isOpen = position == 3
-                binding.layoutPassword.visibility = if (isOpen) View.GONE else View.VISIBLE
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
     }
 
     // ============================================
@@ -186,12 +159,18 @@ class WifiManageActivity : AppCompatActivity() {
         binding.btnScanWifi.isEnabled = false
         binding.btnScanWifi.text = "Scanning..."
 
+        // Pause health check to avoid sendAndReceive collision
+        stopHealthCheck()
+
         Thread {
             val response = bt.sendAndReceive("SEARCH_WIFI", timeoutMs = 25000)
 
             runOnUiThread {
                 binding.btnScanWifi.isEnabled = true
                 binding.btnScanWifi.text = getString(R.string.scan_wifi_networks)
+
+                // Resume health check after command completes
+                startHealthCheck()
 
                 if (response == null) {
                     Toast.makeText(this, "[WF-E02] No response from robot (timeout)", Toast.LENGTH_SHORT).show()
@@ -225,7 +204,6 @@ class WifiManageActivity : AppCompatActivity() {
      */
     private fun connectWifi() {
         val ssid = binding.editSsid.text.toString().trim()
-        val securityIndex = binding.spinnerSecurity.selectedItemPosition
         val password = binding.editPassword.text.toString()
 
         if (ssid.isEmpty()) {
@@ -234,7 +212,8 @@ class WifiManageActivity : AppCompatActivity() {
         }
         binding.layoutSsid.error = null
 
-        if (securityIndex != 3 && password.isEmpty()) {
+        // Only require password for non-open networks
+        if (!isOpenNetwork && password.isEmpty()) {
             binding.layoutPassword.error = "[WF-E07] Please enter password"
             return
         }
@@ -250,8 +229,11 @@ class WifiManageActivity : AppCompatActivity() {
         binding.btnConnectWifi.text = "Connecting..."
         updateWifiStatus(ssid, "Connecting...")
 
+        // Pause health check to avoid sendAndReceive collision
+        stopHealthCheck()
+
         Thread {
-            val command = if (securityIndex == 3) {
+            val command = if (isOpenNetwork || password.isEmpty()) {
                 // Open network — no password
                 "CONNECT_WIFI:$ssid:"
             } else {
@@ -263,6 +245,9 @@ class WifiManageActivity : AppCompatActivity() {
             runOnUiThread {
                 binding.btnConnectWifi.isEnabled = true
                 binding.btnConnectWifi.text = getString(R.string.connect_wifi)
+
+                // Resume health check after command completes
+                startHealthCheck()
 
                 when {
                     response == null -> {
@@ -312,6 +297,9 @@ class WifiManageActivity : AppCompatActivity() {
         val bt = btService
         if (bt == null || !bt.isConnected) return
 
+        // Pause health check to avoid sendAndReceive collision
+        stopHealthCheck()
+
         Thread {
             val response = bt.sendAndReceive("CURRENT_WIFI", timeoutMs = 10000)
 
@@ -324,6 +312,9 @@ class WifiManageActivity : AppCompatActivity() {
                         updateWifiStatus(ssid, "Connected")
                     }
                 }
+
+                // Resume health check after command completes
+                startHealthCheck()
             }
         }.start()
     }
@@ -366,15 +357,20 @@ class WifiManageActivity : AppCompatActivity() {
                 val selected = networks[which]
                 binding.editSsid.setText(selected.ssid)
 
-                // Auto-select security type based on server response
-                val secIdx = when {
-                    selected.security.contains("WPA3", ignoreCase = true) -> 1
-                    selected.security.contains("WPA", ignoreCase = true) -> 0
-                    selected.security.contains("WEP", ignoreCase = true) -> 2
-                    selected.security.isBlank() || selected.security.contains("--") -> 3
-                    else -> 0
+                // Auto-detect open network (no security)
+                val securityStr = selected.security
+                isOpenNetwork = securityStr.isBlank() || securityStr.contains("--") || securityStr.equals("Open", ignoreCase = true)
+
+                if (isOpenNetwork) {
+                    // Hide password field for open networks
+                    binding.layoutPassword.visibility = View.GONE
+                    binding.editPassword.setText("")
+                } else {
+                    // Show password field and auto-focus for quick entry
+                    binding.layoutPassword.visibility = View.VISIBLE
+                    binding.editPassword.setText("")
+                    binding.editPassword.requestFocus()
                 }
-                binding.spinnerSecurity.setSelection(secIdx)
 
                 Toast.makeText(this, "Selected: ${selected.ssid}", Toast.LENGTH_SHORT).show()
             }
