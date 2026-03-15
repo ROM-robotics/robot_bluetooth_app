@@ -9,8 +9,6 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
-import com.journeyapps.barcodescanner.BeepManager
-import com.journeyapps.barcodescanner.CameraSettings
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import com.journeyapps.barcodescanner.DefaultDecoderFactory
 
@@ -25,7 +23,6 @@ class QrScanActivity : AppCompatActivity() {
     }
 
     private lateinit var barcodeView: DecoratedBarcodeView
-    private lateinit var beepManager: BeepManager
     private var handled = false
 
     private val callback = object : BarcodeCallback {
@@ -33,7 +30,6 @@ class QrScanActivity : AppCompatActivity() {
             val text = result?.text?.trim()
             if (handled || text.isNullOrEmpty()) return
             handled = true
-            beepManager.playBeepSoundAndVibrate()
             val intent = Intent().putExtra(EXTRA_SCAN_RESULT, text)
             setResult(Activity.RESULT_OK, intent)
             finish()
@@ -49,17 +45,10 @@ class QrScanActivity : AppCompatActivity() {
         setContentView(R.layout.activity_qr_scan)
 
         barcodeView = findViewById(R.id.barcodeScanner)
-        beepManager = BeepManager(this)
 
         // Restrict to QR/Data Matrix to speed up decoding
         val formats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
         barcodeView.decoderFactory = DefaultDecoderFactory(formats)
-
-        // Use continuous autofocus and back camera
-        barcodeView.barcodeView.cameraSettings = CameraSettings().apply {
-            requestedCameraId = -1 // default back camera
-            isAutoFocusEnabled = true
-        }
 
         barcodeView.decodeContinuous(callback)
 
