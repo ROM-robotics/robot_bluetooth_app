@@ -16,7 +16,6 @@ import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import com.journeyapps.barcodescanner.DefaultDecoderFactory
-import com.journeyapps.barcodescanner.camera.CameraSettings
 
 /**
  * Standalone QR scanner screen using ZXing's embedded view.
@@ -60,14 +59,6 @@ class QrScanActivity : AppCompatActivity() {
 
         // Restrict to QR/Data Matrix and enable TRY_HARDER for picky cameras
         barcodeView.decoderFactory = DefaultDecoderFactory(decodeFormats, decodeHints)
-
-        // Use continuous autofocus on the back camera
-        val cameraSettings = CameraSettings().apply {
-            requestedCameraId = 0 // back camera (default)
-            isAutoFocusEnabled = true
-            focusMode = CameraSettings.FocusMode.CONTINUOUS
-        }
-        barcodeView.barcodeView.cameraSettings = cameraSettings
 
         barcodeView.decodeContinuous(callback)
 
