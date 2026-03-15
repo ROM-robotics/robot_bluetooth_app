@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.BeepManager
@@ -27,14 +28,20 @@ class QrScanActivity : AppCompatActivity() {
     private lateinit var beepManager: BeepManager
     private var handled = false
 
-    private val callback = BarcodeCallback { result: BarcodeResult? ->
-        val text = result?.text?.trim()
-        if (handled || text.isNullOrEmpty()) return@BarcodeCallback
-        handled = true
-        beepManager.playBeepSoundAndVibrate()
-        val intent = Intent().putExtra(EXTRA_SCAN_RESULT, text)
-        setResult(Activity.RESULT_OK, intent)
-        finish()
+    private val callback = object : BarcodeCallback {
+        override fun barcodeResult(result: BarcodeResult?) {
+            val text = result?.text?.trim()
+            if (handled || text.isNullOrEmpty()) return
+            handled = true
+            beepManager.playBeepSoundAndVibrate()
+            val intent = Intent().putExtra(EXTRA_SCAN_RESULT, text)
+            setResult(Activity.RESULT_OK, intent)
+            finish()
+        }
+
+        override fun possibleResultPoints(resultPoints: List<ResultPoint>) {
+            // Ignored
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
