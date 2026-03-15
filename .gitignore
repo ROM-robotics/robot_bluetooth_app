@@ -17,6 +17,7 @@ build/
 
 # Gradle files
 .gradle/
+.gradle-sandbox/
 local.properties
 
 # IDE
