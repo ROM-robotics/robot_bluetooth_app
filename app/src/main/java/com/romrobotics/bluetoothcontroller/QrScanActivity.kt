@@ -49,8 +49,8 @@ class QrScanActivity : AppCompatActivity() {
 
         // Restrict to QR/Data Matrix to speed up decoding and enable TRY_HARDER for picky cameras
         val formats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
-        val hints = mapOf(DecodeHintType.TRY_HARDER to true)
-        barcodeView.decoderFactory = DefaultDecoderFactory(formats, hints, null)
+        val hints: Map<DecodeHintType, *> = mapOf(DecodeHintType.TRY_HARDER to true)
+        barcodeView.decoderFactory = DefaultDecoderFactory(formats, hints)
 
         barcodeView.decodeContinuous(callback)
 
