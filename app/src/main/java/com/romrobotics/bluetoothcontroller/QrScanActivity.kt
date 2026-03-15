@@ -2,9 +2,13 @@ package com.romrobotics.bluetoothcontroller
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import java.util.EnumMap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.DecodeHintType
 import com.google.zxing.ResultPoint
@@ -12,6 +16,7 @@ import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import com.journeyapps.barcodescanner.DefaultDecoderFactory
+import com.journeyapps.barcodescanner.camera.CameraSettings
 
 /**
  * Standalone QR scanner screen using ZXing's embedded view.
@@ -25,6 +30,12 @@ class QrScanActivity : AppCompatActivity() {
 
     private lateinit var barcodeView: DecoratedBarcodeView
     private var handled = false
+    private var torchOn = false
+    private val decodeFormats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
+    private val decodeHints: MutableMap<DecodeHintType, Any> =
+        EnumMap(DecodeHintType::class.java).apply {
+            put(DecodeHintType.TRY_HARDER, java.lang.Boolean.TRUE)
+        }
 
     private val callback = object : BarcodeCallback {
         override fun barcodeResult(result: BarcodeResult?) {
@@ -47,14 +58,37 @@ class QrScanActivity : AppCompatActivity() {
 
         barcodeView = findViewById(R.id.barcodeScanner)
 
-        // Restrict to QR/Data Matrix to speed up decoding and enable TRY_HARDER for picky cameras
-        val formats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
-        val hints: Map<DecodeHintType, Any> = mapOf(DecodeHintType.TRY_HARDER to java.lang.Boolean.TRUE)
-        barcodeView.decoderFactory = DefaultDecoderFactory(formats, hints, null, Int.MAX_VALUE)
+        // Restrict to QR/Data Matrix and enable TRY_HARDER for picky cameras
+        barcodeView.decoderFactory = DefaultDecoderFactory(decodeFormats, decodeHints)
+
+        // Use continuous autofocus on the back camera
+        val cameraSettings = CameraSettings().apply {
+            requestedCameraId = CameraSettings.CAMERA_ID_BACK
+            isAutoFocusEnabled = true
+            focusMode = CameraSettings.FocusMode.CONTINUOUS
+        }
+        barcodeView.barcodeView.cameraSettings = cameraSettings
 
         barcodeView.decodeContinuous(callback)
 
-        findViewById<View>(R.id.btnClose).setOnClickListener {
+        val torchButton = findViewById<MaterialButton>(R.id.btnTorch)
+        val hasFlash = packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)
+        if (!hasFlash) {
+            torchButton.visibility = View.GONE
+        } else {
+            torchButton.setOnClickListener {
+                torchOn = !torchOn
+                if (torchOn) {
+                    barcodeView.setTorchOn()
+                    torchButton.text = getString(R.string.qr_torch_off)
+                } else {
+                    barcodeView.setTorchOff()
+                    torchButton.text = getString(R.string.qr_torch_on)
+                }
+            }
+        }
+
+        findViewById<TextView>(R.id.btnClose).setOnClickListener {
             setResult(Activity.RESULT_CANCELED)
             finish()
         }
@@ -63,11 +97,15 @@ class QrScanActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         handled = false
-        barcodeView.resume()
+        runCatching { barcodeView.resume() }
     }
 
     override fun onPause() {
         super.onPause()
-        barcodeView.pause()
+        if (torchOn) {
+            runCatching { barcodeView.setTorchOff() }
+            torchOn = false
+        }
+        runCatching { barcodeView.pause() }
     }
 }

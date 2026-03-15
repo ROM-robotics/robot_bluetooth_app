@@ -22,4 +22,10 @@
     <string name="quit_app">Quit App</string>
 
     <string name="company_name">ROM-Dynamics Co.,Ltd</string>
+
+    <!-- QR Scanner -->
+    <string name="qr_align_hint">Align QR code inside the square</string>
+    <string name="qr_close">Close</string>
+    <string name="qr_torch_on">Torch On</string>
+    <string name="qr_torch_off">Torch Off</string>
 </resources>
