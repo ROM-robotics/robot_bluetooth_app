@@ -10,8 +10,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:zxing_use_texture_view="true"
-        app:zxing_framing_rect_width="260dp"
-        app:zxing_framing_rect_height="260dp" />
+        app:zxing_framing_rect_width="320dp"
+        app:zxing_framing_rect_height="320dp" />
 
     <TextView
         android:layout_width="wrap_content"

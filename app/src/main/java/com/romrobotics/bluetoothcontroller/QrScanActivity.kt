@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.DecodeHintType
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
@@ -46,9 +47,10 @@ class QrScanActivity : AppCompatActivity() {
 
         barcodeView = findViewById(R.id.barcodeScanner)
 
-        // Restrict to QR/Data Matrix to speed up decoding
+        // Restrict to QR/Data Matrix to speed up decoding and enable TRY_HARDER for picky cameras
         val formats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
-        barcodeView.decoderFactory = DefaultDecoderFactory(formats)
+        val hints = mapOf(DecodeHintType.TRY_HARDER to true)
+        barcodeView.decoderFactory = DefaultDecoderFactory(formats, hints, null, null)
 
         barcodeView.decodeContinuous(callback)
 
