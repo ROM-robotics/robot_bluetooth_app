@@ -63,7 +63,7 @@ class QrScanActivity : AppCompatActivity() {
 
         // Use continuous autofocus on the back camera
         val cameraSettings = CameraSettings().apply {
-            requestedCameraId = CameraSettings.CAMERA_ID_BACK
+            requestedCameraId = 0 // back camera (default)
             isAutoFocusEnabled = true
             focusMode = CameraSettings.FocusMode.CONTINUOUS
         }
