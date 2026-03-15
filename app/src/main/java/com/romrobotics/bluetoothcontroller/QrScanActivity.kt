@@ -8,9 +8,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
-import java.util.EnumMap
 import com.google.zxing.BarcodeFormat
-import com.google.zxing.DecodeHintType
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
@@ -31,10 +29,6 @@ class QrScanActivity : AppCompatActivity() {
     private var handled = false
     private var torchOn = false
     private val decodeFormats = listOf(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX)
-    private val decodeHints: MutableMap<DecodeHintType, Any> =
-        EnumMap(DecodeHintType::class.java).apply {
-            put(DecodeHintType.TRY_HARDER, java.lang.Boolean.TRUE)
-        }
 
     private val callback = object : BarcodeCallback {
         override fun barcodeResult(result: BarcodeResult?) {
@@ -57,8 +51,8 @@ class QrScanActivity : AppCompatActivity() {
 
         barcodeView = findViewById(R.id.barcodeScanner)
 
-        // Restrict to QR/Data Matrix and enable TRY_HARDER for picky cameras
-        barcodeView.decoderFactory = DefaultDecoderFactory(decodeFormats, decodeHints)
+        // Restrict to QR/Data Matrix
+        barcodeView.decoderFactory = DefaultDecoderFactory(decodeFormats)
 
         barcodeView.decodeContinuous(callback)
 
