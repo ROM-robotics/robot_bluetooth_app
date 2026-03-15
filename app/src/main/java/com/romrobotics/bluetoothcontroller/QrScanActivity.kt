@@ -39,7 +39,7 @@ class QrScanActivity : AppCompatActivity() {
             finish()
         }
 
-        override fun possibleResultPoints(resultPoints: List<ResultPoint>) {
+        override fun possibleResultPoints(resultPoints: MutableList<ResultPoint>) {
             // Ignored
         }
     }
