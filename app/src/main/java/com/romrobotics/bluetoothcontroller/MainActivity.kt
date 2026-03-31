@@ -13,9 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanIntentResult
-import com.journeyapps.barcodescanner.ScanOptions
+import android.app.Activity
 import com.romrobotics.bluetoothcontroller.databinding.ActivityMainBinding
 
 /**
@@ -43,19 +41,21 @@ class MainActivity : AppCompatActivity() {
             private set
     }
 
-    // QR code scanner launcher
-    private val qrScanLauncher = registerForActivityResult(ScanContract()) { result: ScanIntentResult ->
-        if (result.contents != null) {
-            val scanned = result.contents.trim()
-            // Accept raw MAC or extract from string
-            val mac = extractMacAddress(scanned)
-            if (mac != null) {
-                binding.editMacAddress.setText(mac)
-                Toast.makeText(this, "MAC address scanned", Toast.LENGTH_SHORT).show()
-            } else {
-                // Put raw content if no MAC pattern found
-                binding.editMacAddress.setText(scanned)
-                Toast.makeText(this, "Scanned: $scanned", Toast.LENGTH_SHORT).show()
+    // QR scanner launcher (uses custom in-app scanner for better reliability)
+    private val qrScanLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val scanned = result.data?.getStringExtra(QrScanActivity.EXTRA_SCAN_RESULT)?.trim()
+            if (!scanned.isNullOrEmpty()) {
+                val mac = extractMacAddress(scanned)
+                if (mac != null) {
+                    binding.editMacAddress.setText(mac)
+                    Toast.makeText(this, "MAC address scanned", Toast.LENGTH_SHORT).show()
+                } else {
+                    binding.editMacAddress.setText(scanned)
+                    Toast.makeText(this, "Scanned: $scanned", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -198,15 +198,8 @@ class MainActivity : AppCompatActivity() {
     // ============================================
 
     private fun launchQrScanner() {
-        val options = ScanOptions().apply {
-            setDesiredBarcodeFormats(ScanOptions.QR_CODE, ScanOptions.DATA_MATRIX)
-            setPrompt("Scan QR code containing MAC address")
-            setCameraId(0)
-            setBeepEnabled(true)
-            setBarcodeImageEnabled(false)
-            setOrientationLocked(true)
-        }
-        qrScanLauncher.launch(options)
+        val intent = Intent(this, QrScanActivity::class.java)
+        qrScanLauncher.launch(intent)
     }
 
     // ============================================

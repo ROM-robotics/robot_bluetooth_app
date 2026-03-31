@@ -24,6 +24,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # Some tools reset JAVA_HOME to system JDK 11; ensure Gradle uses JDK 17
+      - name: Force JDK 17
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
+          echo "$JAVA_HOME_17_X64/bin" >> $GITHUB_PATH
+          java -version
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -32,9 +39,15 @@ jobs:
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+          ORG_GRADLE_JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+          ORG_GRADLE_JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
 
       - name: Get tag name
         id: tag

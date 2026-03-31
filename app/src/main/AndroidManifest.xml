@@ -35,6 +35,12 @@
             android:name=".WifiManageActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".QrScanActivity"
+            android:exported="false"
+            android:screenOrientation="fullSensor"
+            android:hardwareAccelerated="true" />
+
         <!-- ZXing QR Scanner Activity (must have hardwareAccelerated for camera preview) -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
